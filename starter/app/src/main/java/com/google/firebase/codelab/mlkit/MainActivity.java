@@ -85,6 +85,14 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     // Max height (portrait mode)
     private Integer mImageMaxHeight;
     /**
+     * An instance of the driver class to run model inference with Firebase.
+     */
+    private FirebaseModelInterpreter mInterpreter;
+    /**
+     * Data configuration of input & output data of model.
+     */
+    private FirebaseModelInputOutputOptions mDataOptions;
+    /**
      * Name of the model file hosted with Firebase.
      */
     private static final String HOSTED_MODEL_NAME = "cloud_model_1";
@@ -261,7 +269,45 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     }
 
     private void initCustomModel() {
-        // Replace with code from the codelab to initialize your custom model
+        mLabelList = loadLabelList(this);
+
+        int[] inputDims = {DIM_BATCH_SIZE, DIM_IMG_SIZE_X, DIM_IMG_SIZE_Y, DIM_PIXEL_SIZE};
+        int[] outputDims = {DIM_BATCH_SIZE, mLabelList.size()};
+        try {
+            mDataOptions =
+                    new FirebaseModelInputOutputOptions.Builder()
+                            .setInputFormat(0, FirebaseModelDataType.BYTE, inputDims)
+                            .setOutputFormat(0, FirebaseModelDataType.BYTE, outputDims)
+                            .build();
+            FirebaseModelDownloadConditions conditions = new FirebaseModelDownloadConditions
+                    .Builder()
+                    .requireWifi()
+                    .build();
+            FirebaseLocalModelSource localSource =
+                    new FirebaseLocalModelSource.Builder("asset")
+                            .setAssetFilePath(LOCAL_MODEL_ASSET).build();
+
+            FirebaseCloudModelSource cloudSource = new FirebaseCloudModelSource.Builder
+                    (HOSTED_MODEL_NAME)
+                    .enableModelUpdates(true)
+                    .setInitialDownloadConditions(conditions)
+                    .setUpdatesDownloadConditions(conditions)  // You could also specify
+                    // different conditions
+                    // for updates
+                    .build();
+            FirebaseModelManager manager = FirebaseModelManager.getInstance();
+            manager.registerLocalModelSource(localSource);
+            manager.registerCloudModelSource(cloudSource);
+            FirebaseModelOptions modelOptions =
+                    new FirebaseModelOptions.Builder()
+                            .setCloudModelName(HOSTED_MODEL_NAME)
+                            .setLocalModelName("asset")
+                            .build();
+            mInterpreter = FirebaseModelInterpreter.getInstance(modelOptions);
+        } catch (FirebaseMLException e) {
+            showToast("Error while setting up the model");
+            e.printStackTrace();
+        }
     }
 
     private void runModelInference() {
